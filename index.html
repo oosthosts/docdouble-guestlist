@@ -294,7 +294,7 @@
       </div>
     </div>
 
-    <div class="footer">@docdoublemusic &nbsp;·&nbsp; @briffey</div>
+    <div class="footer">@docdoublemusic &nbsp;·&nbsp; @briffeybeats</div>
   </div>
 </div>
 
@@ -316,14 +316,11 @@ form.addEventListener('submit', async (e) => {
   status.className = 'status';
   try {
     const body = new URLSearchParams({ name: name });
-    const res = await fetch(ENDPOINT, { method: 'POST', body: body });
-    const data = await res.json();
-    if (data && data.ok) {
-      form.style.display = 'none';
-      success.classList.add('show');
-    } else {
-      throw new Error((data && data.error) || 'Submission failed');
-    }
+    // Apps Script redirects cross-origin which breaks CORS reads.
+    // Use no-cors and optimistically show success once the POST fires.
+    await fetch(ENDPOINT, { method: 'POST', body: body, mode: 'no-cors' });
+    form.style.display = 'none';
+    success.classList.add('show');
   } catch (err) {
     status.textContent = 'Network error — try again';
     status.className = 'status err';
