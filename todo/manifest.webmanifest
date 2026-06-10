@@ -1,0 +1,19 @@
+{
+  "name": "Eisenhower To-Do",
+  "short_name": "To-Do",
+  "description": "Priority matrix to-do list with Google Sheet sync and calendar.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060a09",
+  "theme_color": "#060a09",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23060a09'/%3E%3Cg stroke='%233dffc0' stroke-width='10' fill='none'%3E%3Crect x='96' y='96' width='320' height='320'/%3E%3Cline x1='256' y1='96' x2='256' y2='416'/%3E%3Cline x1='96' y1='256' x2='416' y2='256'/%3E%3C/g%3E%3Cpath d='M150 180 l30 30 l55 -60' stroke='%233dffc0' stroke-width='16' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0"/>
+<title>Eisenhower To-Do</title>
+<meta name="description" content="Priority-matrix to-do list with Google Sheet sync, dictation, and one-tap Google Calendar."/>
+<meta name="theme-color" content="#060a09"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="To-Do"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23060a09'/%3E%3Cg stroke='%233dffc0' stroke-width='10' fill='none'%3E%3Crect x='96' y='96' width='320' height='320'/%3E%3Cline x1='256' y1='96' x2='256' y2='416'/%3E%3Cline x1='96' y1='256' x2='416' y2='256'/%3E%3C/g%3E%3Cpath d='M150 180 l30 30 l55 -60' stroke='%233dffc0' stroke-width='16' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23060a09'/%3E%3Cg stroke='%233dffc0' stroke-width='4' fill='none'%3E%3Crect x='10' y='10' width='44' height='44'/%3E%3Cline x1='32' y1='10' x2='32' y2='54'/%3E%3Cline x1='10' y1='32' x2='54' y2='32'/%3E%3C/g%3E%3C/svg%3E"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --bg:#060a09; --surface:#0a0f0d; --card:#0f1612;
+    --border:rgba(255,255,255,.07); --border-bright:rgba(180,230,200,.22);
+    --accent:#3dffc0; --accent2:#00a878;
+    --text:#dff0e8; --muted:#6a8a7a; --warn:#ffcc44; --danger:#ff6b6b;
+    /* quadrant colors */
+    --q-us:#ff6b6b; --q-uc:#ffcc44; --q-ls:#3dffc0; --q-lc:#7aa7ff;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:'Syne',system-ui,sans-serif;
+    overflow-x:hidden;
+    padding-top:var(--safe-top);padding-bottom:var(--safe-bot);
+  }
+  button,input,textarea,select{font-family:inherit;color:inherit;}
+  button{cursor:pointer;border:none;background:none;}
+  .hidden{display:none !important;}
+
+  /* ---------- top bar ---------- */
+  header.topbar{
+    position:sticky;top:0;z-index:30;
+    background:linear-gradient(180deg,rgba(6,10,9,.97),rgba(6,10,9,.86));
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+    padding:10px 14px;display:flex;align-items:center;gap:10px;
+  }
+  .brand{font-family:'Orbitron',sans-serif;font-weight:800;font-size:15px;
+    letter-spacing:.06em;color:var(--accent);white-space:nowrap;}
+  .brand small{display:block;font-family:'Syne';font-weight:600;font-size:9px;
+    letter-spacing:.18em;color:var(--muted);text-transform:uppercase;}
+  .spacer{flex:1;}
+  .icon-btn{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+    border:1px solid var(--border);background:var(--card);color:var(--text);font-size:16px;}
+  .icon-btn:active{transform:scale(.93);}
+  .sync-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;
+    transition:background .3s;}
+  .sync-dot.ok{background:var(--accent);box-shadow:0 0 8px var(--accent);}
+  .sync-dot.busy{background:var(--warn);animation:pulse 1s infinite;}
+  .sync-dot.err{background:var(--danger);}
+  @keyframes pulse{50%{opacity:.3;}}
+
+  /* ---------- quick add ---------- */
+  .quickadd{padding:12px 14px 6px;display:flex;flex-direction:column;gap:8px;}
+  .qa-row{display:flex;gap:8px;}
+  .qa-input{
+    flex:1;background:var(--card);border:1px solid var(--border-bright);
+    border-radius:14px;padding:14px 14px;font-size:16px;color:var(--text);
+    min-height:50px;
+  }
+  .qa-input:focus{outline:none;border-color:var(--accent);}
+  .qa-add{background:var(--accent);color:#03110c;font-weight:800;border-radius:14px;
+    padding:0 18px;font-size:22px;min-width:54px;}
+  .qa-add:active{transform:scale(.95);}
+  .qa-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;}
+  .qa-chips::-webkit-scrollbar{display:none;}
+  .chip{flex:none;border:1px solid var(--border);background:var(--surface);
+    border-radius:20px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--muted);
+    display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .chip .dot{width:9px;height:9px;border-radius:3px;}
+  .chip.sel{color:var(--text);border-color:currentColor;}
+  .chip[data-q="us"].sel{color:var(--q-us);} .chip[data-q="uc"].sel{color:var(--q-uc);}
+  .chip[data-q="ls"].sel{color:var(--q-ls);} .chip[data-q="lc"].sel{color:var(--q-lc);}
+
+  /* ---------- board ---------- */
+  .board{padding:8px 12px 90px;display:grid;gap:12px;}
+  @media(min-width:760px){.board{grid-template-columns:1fr 1fr;}}
+  .quad{background:var(--surface);border:1px solid var(--border);border-radius:18px;
+    overflow:hidden;display:flex;flex-direction:column;min-height:120px;}
+  .quad.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px rgba(61,255,192,.25) inset;}
+  .quad-head{padding:11px 14px;display:flex;align-items:center;gap:9px;
+    border-bottom:1px solid var(--border);position:sticky;}
+  .quad-head .bar{width:5px;height:26px;border-radius:3px;flex:none;}
+  .quad-title{font-weight:800;font-size:13.5px;letter-spacing:.02em;}
+  .quad-sub{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;}
+  .quad-count{margin-left:auto;font-size:12px;color:var(--muted);font-weight:700;
+    background:var(--card);border-radius:20px;padding:3px 9px;min-width:26px;text-align:center;}
+  .quad[data-q="us"] .bar{background:var(--q-us);} .quad[data-q="us"] .quad-title{color:var(--q-us);}
+  .quad[data-q="uc"] .bar{background:var(--q-uc);} .quad[data-q="uc"] .quad-title{color:var(--q-uc);}
+  .quad[data-q="ls"] .bar{background:var(--q-ls);} .quad[data-q="ls"] .quad-title{color:var(--q-ls);}
+  .quad[data-q="lc"] .bar{background:var(--q-lc);} .quad[data-q="lc"] .quad-title{color:var(--q-lc);}
+  .tasks{padding:8px;display:flex;flex-direction:column;gap:8px;flex:1;}
+  .empty{color:var(--muted);font-size:12px;text-align:center;padding:14px 6px;opacity:.7;}
+
+  /* ---------- task card ---------- */
+  .task{background:var(--card);border:1px solid var(--border);border-radius:13px;
+    padding:11px 11px 9px;display:flex;gap:10px;align-items:flex-start;position:relative;
+    transition:opacity .15s,transform .12s;}
+  .task.dragging{opacity:.45;}
+  .task.done{opacity:.55;}
+  .task.done .t-title{text-decoration:line-through;color:var(--muted);}
+  .check{width:24px;height:24px;border-radius:7px;border:2px solid var(--border-bright);
+    flex:none;display:grid;place-items:center;margin-top:1px;font-size:14px;color:#03110c;}
+  .task.done .check{background:var(--accent);border-color:var(--accent);}
+  .t-body{flex:1;min-width:0;}
+  .t-title{font-size:15px;line-height:1.3;word-break:break-word;font-weight:600;}
+  .t-notes{font-size:12.5px;color:var(--muted);margin-top:3px;word-break:break-word;white-space:pre-wrap;}
+  .t-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+  .badge{font-size:10.5px;font-weight:700;border-radius:7px;padding:3px 7px;
+    background:var(--surface);color:var(--muted);display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);}
+  .badge.due{color:var(--warn);} .badge.due.over{color:var(--danger);}
+  .badge.cal{color:var(--accent);}
+  .t-actions{display:flex;gap:3px;flex:none;}
+  .t-actions button{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+    font-size:14px;color:var(--muted);}
+  .t-actions button:active{background:var(--surface);transform:scale(.9);}
+  .drag-handle{cursor:grab;touch-action:none;}
+
+  /* ---------- modal / sheet ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);
+    z-index:50;display:flex;align-items:flex-end;justify-content:center;}
+  @media(min-width:640px){.scrim{align-items:center;}}
+  .sheet{background:var(--surface);border:1px solid var(--border-bright);
+    border-radius:22px 22px 0 0;width:100%;max-width:520px;padding:18px 18px calc(20px + var(--safe-bot));
+    max-height:92vh;overflow-y:auto;animation:up .22s ease;}
+  @media(min-width:640px){.sheet{border-radius:20px;}}
+  @keyframes up{from{transform:translateY(30px);opacity:.6;}}
+  .sheet h2{font-size:17px;font-weight:800;margin-bottom:14px;color:var(--accent);}
+  .field{margin-bottom:13px;}
+  .field label{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .field input,.field textarea,.field select{width:100%;background:var(--card);
+    border:1px solid var(--border-bright);border-radius:12px;padding:13px;font-size:16px;}
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--accent);}
+  .field textarea{resize:vertical;min-height:64px;}
+  .q-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .q-opt{border:1px solid var(--border);border-radius:12px;padding:11px;text-align:left;
+    display:flex;flex-direction:column;gap:3px;background:var(--card);}
+  .q-opt .qt{font-weight:800;font-size:12.5px;display:flex;align-items:center;gap:6px;}
+  .q-opt .qs{font-size:10px;color:var(--muted);}
+  .q-opt .dot{width:10px;height:10px;border-radius:3px;}
+  .q-opt.sel{border-color:currentColor;}
+  .q-opt[data-q="us"].sel{color:var(--q-us);} .q-opt[data-q="uc"].sel{color:var(--q-uc);}
+  .q-opt[data-q="ls"].sel{color:var(--q-ls);} .q-opt[data-q="lc"].sel{color:var(--q-lc);}
+  .sheet-actions{display:flex;gap:10px;margin-top:8px;}
+  .btn{flex:1;border-radius:13px;padding:14px;font-weight:800;font-size:15px;text-align:center;}
+  .btn-primary{background:var(--accent);color:#03110c;}
+  .btn-ghost{background:var(--card);border:1px solid var(--border);color:var(--text);}
+  .btn-danger{background:rgba(255,107,107,.12);color:var(--danger);border:1px solid rgba(255,107,107,.3);}
+  .btn:active{transform:scale(.97);}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:4px;}
+  .hint a{color:var(--accent);}
+
+  /* ---------- login ---------- */
+  .login{min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+    align-items:center;padding:26px;gap:18px;text-align:center;}
+  .login .logo{width:64px;height:64px;}
+  .login h1{font-family:'Orbitron';font-weight:800;font-size:20px;letter-spacing:.04em;color:var(--accent);}
+  .login p{color:var(--muted);font-size:13px;max-width:300px;line-height:1.5;}
+  .login form{width:100%;max-width:340px;display:flex;flex-direction:column;gap:11px;}
+
+  .toast{position:fixed;left:50%;bottom:calc(22px + var(--safe-bot));transform:translateX(-50%);
+    background:var(--card);border:1px solid var(--border-bright);color:var(--text);
+    padding:11px 18px;border-radius:14px;font-size:13px;font-weight:600;z-index:80;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:90vw;text-align:center;}
+  .toast.err{border-color:var(--danger);color:var(--danger);}
+  .filterbar{display:flex;gap:8px;padding:0 14px 4px;align-items:center;}
+  .filterbar .sw{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+  .filterbar input{accent-color:var(--accent);width:16px;height:16px;}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN / SETUP ============ -->
+<div class="login" id="loginScreen">
+  <svg class="logo" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0a0f0d"/><g stroke="#3dffc0" stroke-width="3" fill="none"><rect x="12" y="12" width="40" height="40" rx="3"/><line x1="32" y1="12" x2="32" y2="52"/><line x1="12" y1="32" x2="52" y2="32"/></g></svg>
+  <h1>To-Do Matrix</h1>
+  <p id="loginMsg">Enter your password to sync across all your devices.</p>
+  <form id="loginForm">
+    <input class="qa-input" id="cfgUrl" type="url" placeholder="Apps Script web app URL (…/exec)" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+    <input class="qa-input" id="cfgPass" type="password" placeholder="Password" autocomplete="current-password"/>
+    <button class="btn btn-primary" type="submit">Unlock &amp; Sync</button>
+    <div class="hint" id="loginHint"></div>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand">MATRIX<small>Eisenhower To-Do</small></div>
+    <div class="spacer"></div>
+    <span class="sync-dot" id="syncDot" title="Sync status"></span>
+    <button class="icon-btn" id="refreshBtn" title="Refresh">&#x21bb;</button>
+    <button class="icon-btn" id="settingsBtn" title="Settings">&#9881;</button>
+  </header>
+
+  <div class="quickadd">
+    <div class="qa-row">
+      <input class="qa-input" id="qaInput" placeholder="Add a task… (tap mic on keyboard to dictate)" enterkeyhint="done"/>
+      <button class="qa-add" id="qaAdd" title="Add">+</button>
+    </div>
+    <div class="qa-chips" id="qaChips"></div>
+  </div>
+
+  <div class="filterbar">
+    <label class="sw"><input type="checkbox" id="hideDone"/> Hide completed</label>
+    <div class="spacer"></div>
+    <span class="sw" id="countAll"></span>
+  </div>
+
+  <main class="board" id="board"></main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+/* =========================================================================
+   CONFIG
+   If you hard-code your deployed Apps Script URL here, users only type the
+   password. Otherwise it's entered on the login screen and saved on-device.
+   ========================================================================= */
+const DEFAULT_API_URL = ''; // e.g. 'https://script.google.com/macros/s/XXXX/exec'
+
+const QUADRANTS = [
+  { id:'us', title:'Do First',     sub:'Urgent · Simple',        color:'var(--q-us)' },
+  { id:'uc', title:'Block Time',   sub:'Urgent · Complex',       color:'var(--q-uc)' },
+  { id:'ls', title:'Quick Wins',   sub:'Long-term · Simple',     color:'var(--q-ls)' },
+  { id:'lc', title:'Plan / Project',sub:'Long-term · Complex',   color:'var(--q-lc)' },
+];
+const QMAP = Object.fromEntries(QUADRANTS.map(q=>[q.id,q]));
+
+const LS = {
+  url:'todo_api_url', pass:'todo_pass', cache:'todo_cache',
+  queue:'todo_queue', quad:'todo_last_quad', hide:'todo_hide_done'
+};
+
+let state = {
+  tasks: [],
+  apiUrl: localStorage.getItem(LS.url) || DEFAULT_API_URL || '',
+  pass: localStorage.getItem(LS.pass) || '',
+  quad: localStorage.getItem(LS.quad) || 'us',
+  hideDone: localStorage.getItem(LS.hide) === '1',
+};
+
+/* ---------------- networking ---------------- */
+function setSync(s){ document.getElementById('syncDot').className = 'sync-dot ' + (s||''); }
+
+async function api(action, payload){
+  if(!state.apiUrl) throw new Error('no_url');
+  const body = JSON.stringify(Object.assign({ action, pass: state.pass }, payload||{}));
+  // text/plain keeps it a CORS "simple request" (no preflight); Apps Script
+  // replies with permissive CORS so we can read the JSON back.
+  const res = await fetch(state.apiUrl, { method:'POST', body, headers:{'Content-Type':'text/plain;charset=utf-8'} });
+  const data = await res.json();
+  if(data && data.error === 'auth') throw new Error('auth');
+  return data;
+}
+
+/* offline write queue: each op = {action, payload, ts} */
+function getQueue(){ try{return JSON.parse(localStorage.getItem(LS.queue)||'[]');}catch(e){return [];} }
+function setQueue(q){ localStorage.setItem(LS.queue, JSON.stringify(q)); }
+function enqueue(action, payload){ const q=getQueue(); q.push({action,payload,ts:Date.now()}); setQueue(q); }
+
+async function flushQueue(){
+  let q = getQueue();
+  if(!q.length) return;
+  const rest = [];
+  for(const op of q){
+    try { await api(op.action, op.payload); }
+    catch(e){ rest.push(op); }   // keep failed ops for next attempt
+  }
+  setQueue(rest);
+}
+
+/* ---------------- data ops (optimistic) ---------------- */
+function saveCache(){ localStorage.setItem(LS.cache, JSON.stringify(state.tasks)); }
+function loadCache(){ try{ state.tasks = JSON.parse(localStorage.getItem(LS.cache)||'[]'); }catch(e){ state.tasks=[]; } }
+
+function nextSort(quad){
+  const inQ = state.tasks.filter(t=>t.quadrant===quad);
+  const min = inQ.reduce((m,t)=>Math.min(m, t.sort), Infinity);
+  return (min===Infinity? Date.now() : min) - 1000; // new tasks go on top
+}
+
+async function pushOp(action, payload){
+  setSync('busy');
+  try { await api(action, payload); await flushQueue(); setSync('ok'); }
+  catch(e){
+    if(e.message==='auth'){ setSync('err'); toast('Wrong password — check Settings','err'); return; }
+    enqueue(action, payload); setSync('err'); // will retry later
+  }
+}
+
+function addTaskLocal(title, quad){
+  const t = {
+    id: 'tmp_'+Math.random().toString(36).slice(2)+Date.now(),
+    title: title.trim(), notes:'', quadrant:quad, sort: nextSort(quad),
+    done:false, due:'', calendarEventId:'', calendarLink:'',
+    created:new Date().toISOString(), updated:new Date().toISOString()
+  };
+  state.tasks.unshift(t); saveCache(); render();
+  pushOp('add', { task: t });
+  return t;
+}
+
+function updateTaskLocal(id, fields){
+  const t = state.tasks.find(x=>x.id===id); if(!t) return;
+  Object.assign(t, fields, { updated:new Date().toISOString() });
+  saveCache(); render();
+  pushOp('update', { id, fields });
+}
+
+function deleteTaskLocal(id){
+  state.tasks = state.tasks.filter(x=>x.id!==id); saveCache(); render();
+  pushOp('delete', { id });
+}
+
+async function refresh(silent){
+  if(!silent) setSync('busy');
+  try {
+    await flushQueue();
+    const data = await api('list', {});
+    if(data && data.ok){
+      // Server is source of truth, but keep any not-yet-synced temp tasks.
+      const temps = state.tasks.filter(t=>String(t.id).startsWith('tmp_'));
+      const serverIds = new Set(data.tasks.map(t=>t.id));
+      state.tasks = data.tasks.concat(temps.filter(t=>!serverIds.has(t.id)));
+      saveCache(); render(); setSync('ok');
+    } else if(data && data.error==='auth'){
+      setSync('err'); toast('Wrong password — check Settings','err');
+    }
+  } catch(e){ setSync(getQueue().length?'err':''); }
+}
+
+/* ---------------- rendering ---------------- */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function fmtDue(iso){
+  if(!iso) return null;
+  const d = new Date(iso); if(isNaN(d)) return null;
+  const now = new Date();
+  const over = d < now;
+  const opts = { month:'short', day:'numeric' };
+  let s = d.toLocaleDateString(undefined, opts);
+  if(d.getHours()||d.getMinutes()) s += ' ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  return { text:s, over };
+}
+
+function render(){
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const sorted = [...state.tasks].sort((a,b)=> a.sort - b.sort);
+  document.getElementById('countAll').textContent =
+    state.tasks.filter(t=>!t.done).length + ' open';
+
+  for(const q of QUADRANTS){
+    let items = sorted.filter(t=>t.quadrant===q.id);
+    if(state.hideDone) items = items.filter(t=>!t.done);
+    const openCount = state.tasks.filter(t=>t.quadrant===q.id && !t.done).length;
+    const quad = document.createElement('section');
+    quad.className='quad'; quad.dataset.q=q.id;
+    quad.innerHTML =
+      `<div class="quad-head"><span class="bar"></span>
+        <div><div class="quad-title">${q.title}</div><div class="quad-sub">${q.sub}</div></div>
+        <span class="quad-count">${openCount}</span></div>
+       <div class="tasks"></div>`;
+    const list = quad.querySelector('.tasks');
+    if(!items.length){
+      const e=document.createElement('div'); e.className='empty'; e.textContent='— empty —'; list.appendChild(e);
+    }
+    for(const t of items) list.appendChild(taskEl(t));
+    setupDrop(quad, q.id, list);
+    board.appendChild(quad);
+  }
+}
+
+function taskEl(t){
+  const el = document.createElement('div');
+  el.className = 'task' + (t.done?' done':'');
+  el.dataset.id = t.id; el.draggable = true;
+  const due = fmtDue(t.due);
+  const meta = [];
+  if(due) meta.push(`<span class="badge due ${due.over&&!t.done?'over':''}">⏰ ${escapeHtml(due.text)}</span>`);
+  if(t.calendarEventId) meta.push(`<span class="badge cal">📅 on calendar</span>`);
+  el.innerHTML =
+    `<button class="check" aria-label="toggle done">${t.done?'✓':''}</button>
+     <div class="t-body">
+       <div class="t-title">${escapeHtml(t.title)||'<span style="color:var(--muted)">(untitled)</span>'}</div>
+       ${t.notes?`<div class="t-notes">${escapeHtml(t.notes)}</div>`:''}
+       ${meta.length?`<div class="t-meta">${meta.join('')}</div>`:''}
+     </div>
+     <div class="t-actions">
+       <button class="act-cal" title="Add to Google Calendar">📅</button>
+       <button class="act-edit" title="Edit">✎</button>
+     </div>`;
+  el.querySelector('.check').onclick = (e)=>{ e.stopPropagation(); updateTaskLocal(t.id,{done:!t.done}); };
+  el.querySelector('.act-edit').onclick = (e)=>{ e.stopPropagation(); openEdit(t); };
+  el.querySelector('.act-cal').onclick = (e)=>{ e.stopPropagation(); openCalendar(t); };
+  el.addEventListener('dragstart', e=>{ el.classList.add('dragging'); e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed='move'; });
+  el.addEventListener('dragend', ()=> el.classList.remove('dragging'));
+  return el;
+}
+
+/* ---------------- drag & drop (desktop) ---------------- */
+function setupDrop(quadEl, quadId, listEl){
+  quadEl.addEventListener('dragover', e=>{ e.preventDefault(); quadEl.classList.add('drag-over'); });
+  quadEl.addEventListener('dragleave', e=>{ if(!quadEl.contains(e.relatedTarget)) quadEl.classList.remove('drag-over'); });
+  quadEl.addEventListener('drop', e=>{
+    e.preventDefault(); quadEl.classList.remove('drag-over');
+    const id = e.dataTransfer.getData('text/plain'); if(!id) return;
+    // find drop position relative to siblings
+    const after = [...listEl.querySelectorAll('.task:not(.dragging)')].find(child=>{
+      const r = child.getBoundingClientRect();
+      return e.clientY < r.top + r.height/2;
+    });
+    moveTask(id, quadId, after ? after.dataset.id : null);
+  });
+}
+
+function moveTask(id, quadId, beforeId){
+  const t = state.tasks.find(x=>x.id===id); if(!t) return;
+  const inQ = state.tasks.filter(x=>x.quadrant===quadId && x.id!==id).sort((a,b)=>a.sort-b.sort);
+  let newSort;
+  if(!beforeId){ // append to end
+    newSort = (inQ.length? inQ[inQ.length-1].sort : Date.now()) + 1000;
+  } else {
+    const idx = inQ.findIndex(x=>x.id===beforeId);
+    const prev = idx>0 ? inQ[idx-1].sort : (inQ.length?inQ[0].sort-2000:Date.now());
+    const cur = inQ[idx] ? inQ[idx].sort : prev+2000;
+    newSort = (prev + cur)/2;
+  }
+  updateTaskLocal(id, { quadrant:quadId, sort:newSort });
+}
+
+/* ---------------- quick add ---------------- */
+function renderChips(){
+  const wrap = document.getElementById('qaChips'); wrap.innerHTML='';
+  for(const q of QUADRANTS){
+    const c=document.createElement('button');
+    c.className='chip'+(state.quad===q.id?' sel':''); c.dataset.q=q.id;
+    c.innerHTML=`<span class="dot" style="background:${q.color}"></span>${q.title}`;
+    c.onclick=()=>{ state.quad=q.id; localStorage.setItem(LS.quad,q.id); renderChips(); };
+    wrap.appendChild(c);
+  }
+}
+function doQuickAdd(){
+  const inp = document.getElementById('qaInput');
+  const v = inp.value.trim(); if(!v) return;
+  addTaskLocal(v, state.quad);
+  inp.value=''; inp.focus();
+}
+
+/* ---------------- modals ---------------- */
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+function modal(html){
+  const root=document.getElementById('modalRoot');
+  root.innerHTML=`<div class="scrim" id="scrim"><div class="sheet">${html}</div></div>`;
+  document.getElementById('scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeModal(); });
+}
+
+function quadPicker(selected){
+  return `<div class="q-grid">${QUADRANTS.map(q=>`
+    <button type="button" class="q-opt${q.id===selected?' sel':''}" data-q="${q.id}">
+      <span class="qt"><span class="dot" style="background:${q.color}"></span>${q.title}</span>
+      <span class="qs">${q.sub}</span>
+    </button>`).join('')}</div>`;
+}
+
+function openEdit(t){
+  modal(`
+    <h2>Edit task</h2>
+    <div class="field"><label>Task</label><input id="eTitle" value="${escapeHtml(t.title)}"/></div>
+    <div class="field"><label>Notes</label><textarea id="eNotes" placeholder="Details… (tap mic to dictate)">${escapeHtml(t.notes||'')}</textarea></div>
+    <div class="field"><label>Priority quadrant</label>${quadPicker(t.quadrant)}</div>
+    <div class="field"><label>Due (optional)</label><input id="eDue" type="datetime-local" value="${t.due?toLocalInput(t.due):''}"/></div>
+    <div class="sheet-actions">
+      <button class="btn btn-danger" id="eDel">Delete</button>
+      <button class="btn btn-primary" id="eSave">Save</button>
+    </div>`);
+  let q = t.quadrant;
+  document.querySelectorAll('.q-opt').forEach(o=>o.onclick=()=>{
+    q=o.dataset.q; document.querySelectorAll('.q-opt').forEach(x=>x.classList.remove('sel')); o.classList.add('sel');
+  });
+  document.getElementById('eSave').onclick=()=>{
+    const dueVal = document.getElementById('eDue').value;
+    updateTaskLocal(t.id, {
+      title: document.getElementById('eTitle').value.trim(),
+      notes: document.getElementById('eNotes').value,
+      quadrant: q,
+      due: dueVal? new Date(dueVal).toISOString() : ''
+    });
+    closeModal();
+  };
+  document.getElementById('eDel').onclick=()=>{
+    if(confirm('Delete this task?')){ deleteTaskLocal(t.id); closeModal(); }
+  };
+  setTimeout(()=>document.getElementById('eTitle').focus(),50);
+}
+
+function openCalendar(t){
+  const def = t.due ? toLocalInput(t.due) : toLocalInput(defaultEventTime());
+  modal(`
+    <h2>Add to Google Calendar</h2>
+    <p class="hint">Creates an event on your Google Calendar for “<b>${escapeHtml(t.title)}</b>”.</p>
+    <div class="field" style="margin-top:12px"><label>Start</label><input id="cStart" type="datetime-local" value="${def}"/></div>
+    <div class="field"><label>Length (minutes)</label><input id="cMin" type="number" min="5" step="5" value="30"/></div>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="cCancel">Cancel</button>
+      <button class="btn btn-primary" id="cGo">Create event</button>
+    </div>`);
+  document.getElementById('cCancel').onclick=closeModal;
+  document.getElementById('cGo').onclick=async ()=>{
+    const startVal = document.getElementById('cStart').value;
+    const min = parseInt(document.getElementById('cMin').value,10)||30;
+    if(!startVal){ toast('Pick a start time','err'); return; }
+    if(String(t.id).startsWith('tmp_')){ toast('Still syncing — try again in a sec','err'); return; }
+    const startIso = new Date(startVal).toISOString();
+    closeModal(); setSync('busy'); toast('Creating calendar event…');
+    try{
+      const r = await api('calendar', { id:t.id, start:startIso, minutes:min });
+      if(r && r.ok){
+        updateTaskLocal(t.id, { calendarEventId:r.eventId||'set', calendarLink:r.link||'', due:startIso });
+        setSync('ok'); toast('✓ Added to Google Calendar');
+      } else if(r && r.error==='no_calendar'){ setSync('err'); toast('Calendar not found — check backend','err'); }
+      else { setSync('err'); toast('Could not create event','err'); }
+    }catch(e){ setSync('err'); toast('Network error — try again','err'); }
+  };
+}
+
+function openSettings(){
+  modal(`
+    <h2>Settings</h2>
+    <div class="field"><label>Apps Script URL</label><input id="sUrl" value="${escapeHtml(state.apiUrl)}" placeholder="…/exec"/></div>
+    <div class="field"><label>Password</label><input id="sPass" type="password" value="${escapeHtml(state.pass)}"/></div>
+    <div class="sheet-actions">
+      <button class="btn btn-danger" id="sOut">Log out</button>
+      <button class="btn btn-primary" id="sSave">Save</button>
+    </div>
+    <p class="hint">Data lives in your Google Sheet. To install on your phone: open this page in Safari/Chrome → Share → <b>Add to Home Screen</b>.</p>`);
+  document.getElementById('sSave').onclick=()=>{
+    state.apiUrl=document.getElementById('sUrl').value.trim();
+    state.pass=document.getElementById('sPass').value;
+    localStorage.setItem(LS.url,state.apiUrl); localStorage.setItem(LS.pass,state.pass);
+    closeModal(); refresh();
+  };
+  document.getElementById('sOut').onclick=()=>{
+    if(confirm('Log out on this device? (Your tasks stay safe in the Sheet.)')){
+      localStorage.removeItem(LS.pass); location.reload();
+    }
+  };
+}
+
+/* ---------------- helpers ---------------- */
+function toLocalInput(iso){
+  const d=new Date(iso); if(isNaN(d)) return '';
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function defaultEventTime(){
+  const d=new Date(); d.setHours(d.getHours()+1,0,0,0); return d.toISOString();
+}
+let toastTimer;
+function toast(msg,type){
+  const root=document.getElementById('toastRoot');
+  root.innerHTML=`<div class="toast ${type||''}">${escapeHtml(msg)}</div>`;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>root.innerHTML='',2600);
+}
+
+/* ---------------- boot ---------------- */
+function showApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  renderChips();
+  document.getElementById('hideDone').checked = state.hideDone;
+  loadCache(); render();
+  refresh();
+}
+
+function bindApp(){
+  document.getElementById('qaAdd').onclick = doQuickAdd;
+  document.getElementById('qaInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doQuickAdd(); });
+  document.getElementById('refreshBtn').onclick = ()=>refresh();
+  document.getElementById('settingsBtn').onclick = openSettings;
+  document.getElementById('hideDone').onchange = (e)=>{
+    state.hideDone=e.target.checked; localStorage.setItem(LS.hide, state.hideDone?'1':'0'); render();
+  };
+  window.addEventListener('online', ()=>refresh(true));
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refresh(true); });
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const url = document.getElementById('cfgUrl').value.trim();
+  const pass = document.getElementById('cfgPass').value;
+  const hint = document.getElementById('loginHint');
+  if(!url){ hint.textContent='Paste your Apps Script web app URL (ends in /exec).'; return; }
+  if(!pass){ hint.textContent='Enter your password.'; return; }
+  state.apiUrl=url; state.pass=pass;
+  hint.textContent='Checking…';
+  try{
+    const data = await api('list', {});
+    if(data && data.error==='auth'){ hint.textContent='Wrong password. Try again.'; return; }
+    localStorage.setItem(LS.url,url); localStorage.setItem(LS.pass,pass);
+    showApp();
+  }catch(err){
+    hint.textContent='Could not reach the server. Double-check the URL and that the web app is deployed to "Anyone".';
+  }
+});
+
+(function init(){
+  bindApp();
+  // Pre-fill login with any saved/hard-coded values.
+  if(state.apiUrl) document.getElementById('cfgUrl').value = state.apiUrl;
+  if(DEFAULT_API_URL && !localStorage.getItem(LS.url)){
+    document.getElementById('cfgUrl').value = DEFAULT_API_URL;
+    document.getElementById('cfgUrl').parentElement && (document.getElementById('cfgUrl').style.display='none');
+  }
+  if(state.apiUrl && state.pass){ showApp(); }
+  // register service worker (installable PWA)
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
